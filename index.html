@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Frichicks Multi-Item Order Assistant</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        /* --- 1. CORE VARIABLES & RESET (Maintained B&W Theme) --- */
+        :root {
+            --bg-color: #000000;
+            --surface-color: #111111;
+            --text-primary: #FFFFFF;
+            --text-secondary: #BBBBBB;
+            --border-dim: #222222;
+            --glass-bg: rgba(0, 0, 0, 0.85);
+            
+            --success-color: #2ecc71; /* Green */
+            --danger-color: #e74c3c;  /* Red */
+
+            --font-main: 'Inter', sans-serif;
+            --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: var(--font-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- 2. HEADER --- */
+        header {
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 1px solid var(--border-dim);
+            background: var(--bg-color);
+            z-index: 10;
+        }
+
+        .brand {
+            font-weight: 600;
+            font-size: 18px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        /* --- 3. CHAT AREA --- */
+        #chat-canvas {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            padding-bottom: 90px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            scroll-behavior: smooth;
+        }
+
+        /* Message Bubbles */
+        .msg-row {
+            display: flex;
+            width: 100%;
+            animation: slideUp 0.3s var(--ease-out) forwards;
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        .msg-row.bot { justify-content: flex-start; }
+        .msg-row.user { justify-content: flex-end; }
+        .bubble {
+            max-width: 80%;
+            padding: 14px 18px;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+        .bot .bubble {
+            background-color: var(--surface-color);
+            color: var(--text-primary);
+            border-radius: 4px 18px 18px 18px;
+            border: 1px solid var(--border-dim);
+        }
+        .user .bubble {
+            background-color: var(--text-primary);
+            color: var(--bg-color);
+            border-radius: 18px 18px 4px 18px;
+            font-weight: 600;
+        }
+
+        /* Option Cards (Menu & Multi-choice) */
+        .options-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 8px;
+            width: 85%;
+            animation: fadeIn 0.4s var(--ease-out) forwards;
+        }
+        .option-card {
+            background: var(--bg-color);
+            border: 1px solid var(--border-dim);
+            padding: 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .option-card:hover {
+            border-color: var(--text-primary);
+            background: var(--surface-color);
+        }
+        .dish-name { font-weight: 600; font-size: 14px; }
+        .dish-price { font-size: 12px; color: var(--text-secondary); }
+
+        /* Action Buttons (Add More / Checkout) */
+        .action-button-group {
+            display: flex;
+            gap: 10px;
+            width: 85%;
+            margin-top: 8px;
+        }
+        .action-button-group .option-card {
+            flex: 1;
+            padding: 12px;
+            justify-content: center;
+        }
+        
+        /* Confirmation & Cart Buttons */
+        .btn-green { border-color: var(--success-color); color: var(--success-color); background: rgba(46, 204, 113, 0.1); font-weight: bold; }
+        .btn-green:active { background: var(--success-color); color: white; }
+        .btn-red { border-color: var(--danger-color); color: var(--danger-color); background: rgba(231, 76, 60, 0.1); font-weight: bold; }
+        .btn-red:active { background: var(--danger-color); color: white; }
+
+        /* Typing Indicator */
+        .typing { display: none; padding: 12px 16px; background: var(--surface-color); border-radius: 4px 18px 18px 18px; width: fit-content; margin-bottom: 10px; border: 1px solid var(--border-dim); }
+        .dot { height: 6px; width: 6px; background: var(--text-secondary); border-radius: 50%; display: inline-block; margin: 0 2px; animation: pulse 1.4s infinite ease-in-out both; }
+        .dot:nth-child(1) { animation-delay: -0.32s; }
+        .dot:nth-child(2) { animation-delay: -0.16s; }
+
+        /* --- 4. INPUT AREA --- */
+        footer {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            padding: 16px 20px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-top: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            gap: 12px;
+            z-index: 20;
+        }
+        input {
+            flex: 1;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid transparent;
+            border-radius: 24px;
+            padding: 12px 20px;
+            color: white;
+            font-size: 16px;
+            font-family: var(--font-main);
+            outline: none;
+        }
+        input:focus { background: black; border-color: var(--text-primary); }
+        .send-btn { background: var(--text-primary); color: black; border: none; border-radius: 50%; width: 46px; height: 46px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .send-btn:active { transform: scale(0.9); }
+
+        /* Animations */
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes pulse { 0%, 80%, 100% { transform: scale(0); opacity: 0.5; } 40% { transform: scale(1); opacity: 1; } }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="brand">FRICHICKS</div>
+    </header>
+
+    <main id="chat-canvas">
+        <div id="typing-indicator" class="typing">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </div>
+    </main>
+
+    <footer>
+        <input type="text" id="user-input" placeholder="Type a message..." autocomplete="off">
+        <button id="send-btn" class="send-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        </button>
+    </footer>
+
+    <script>
+        // --- DATA ---
+        const menuItems = [
+            { name: "Chicken Karahi", price: 1450, detail: " (~ 1,450 PKR)" },
+            { name: "Mutton Karahi", price: 1750, detail: " (~ 1,750 PKR)" },
+            { name: "Chicken Biryani", price: 1350, detail: " (~ 1,350 PKR)" },
+            { name: "Mutton Biryani", price: 1650, detail: " (~ 1,650 PKR)" },
+            { name: "Daal Makhni (lentils)", price: 1595, detail: " (~ 1,595 PKR)" },
+            { name: "Palak Paneer", price: 1150, detail: " (~ 1,150 PKR)" },
+            { name: "Chicken Qorma (Badami)", price: 1290, detail: " (~ 1,290 PKR)" },
+            { name: "Fish Curry", price: 2595, detail: " (~ 2,595 PKR)" },
+            { name: "Chicken Tikka", price: 500, detail: " (400-600 PKR est.)" },
+            { name: "Seekh / Chapli / Mixed Kabab", price: 2195, detail: " (~ 2,195 PKR est.)" }
+        ];
+
+        // --- STATE MANAGEMENT ---
+        /* 0=Idle (shouldn't be reached after start), 1=MenuShown/CartReview, 2=ItemSelected(Needs Quantity), 
+           3=Checkout(Needs Address), 4=Checkout(Needs Phone), 5=ConfirmMode
+        */
+        let chatState = 0; 
+        let currentOrder = { 
+            cart: [],
+            tempDish: null,
+            address: "", 
+            phone: "" 
+        };
+
+        const restaurantNumber = "923394807064"; 
+
+        // --- DOM ELEMENTS ---
+        const chatCanvas = document.getElementById('chat-canvas');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const typingIndicator = document.getElementById('typing-indicator');
+
+        // --- CORE UI FUNCTIONS ---
+
+        function scrollToBottom() {
+            chatCanvas.scrollTop = chatCanvas.scrollHeight;
+        }
+
+        function botTyping(callback) {
+            chatCanvas.appendChild(typingIndicator);
+            typingIndicator.style.display = 'block';
+            scrollToBottom();
+            setTimeout(() => {
+                typingIndicator.style.display = 'none';
+                callback();
+            }, 600);
+        }
+
+        function appendMessage(text, type, isHtml = false) {
+            const row = document.createElement('div');
+            row.className = `msg-row ${type}`;
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            if (isHtml) bubble.innerHTML = text;
+            else bubble.innerText = text;
+            row.appendChild(bubble);
+            chatCanvas.insertBefore(row, typingIndicator);
+            scrollToBottom();
+        }
+
+        function appendMenu() {
+            const grid = document.createElement('div');
+            grid.className = 'options-grid msg-row bot';
+            menuItems.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'option-card';
+                card.innerHTML = `<span class="dish-name">${item.name}</span><span class="dish-price">${item.detail}</span>`;
+                card.onclick = () => handleDishSelect(item.name);
+                grid.appendChild(card);
+            });
+            chatCanvas.insertBefore(grid, typingIndicator);
+            scrollToBottom();
+        }
+
+        function appendCartActionButtons() {
+            const grid = document.createElement('div');
+            grid.className = 'action-button-group msg-row bot';
+
+            const btnAdd = document.createElement('div');
+            btnAdd.className = 'option-card';
+            btnAdd.innerText = 'ADD MORE ITEMS';
+            btnAdd.onclick = () => showMenu(true); // Call showMenu to go back to dish selection
+
+            const btnCheckout = document.createElement('div');
+            btnCheckout.className = 'option-card btn-green';
+            btnCheckout.innerText = 'PROCEED TO CHECKOUT';
+            btnCheckout.onclick = () => startCheckout();
+
+            grid.appendChild(btnAdd);
+            grid.appendChild(btnCheckout);
+            chatCanvas.insertBefore(grid, typingIndicator);
+            scrollToBottom();
+        }
+        
+        function appendFinalConfirmButtons() {
+            const grid = document.createElement('div');
+            grid.className = 'options-grid msg-row bot';
+
+            const btnYes = document.createElement('div');
+            btnYes.className = 'option-card btn-green';
+            btnYes.innerText = 'CONFIRM ORDER';
+            btnYes.onclick = () => finalizeOrder();
+
+            const btnNo = document.createElement('div');
+            btnNo.className = 'option-card btn-red';
+            btnNo.innerText = 'CANCEL';
+            btnNo.onclick = () => resetChat();
+
+            grid.appendChild(btnYes);
+            grid.appendChild(btnNo);
+            chatCanvas.insertBefore(grid, typingIndicator);
+            scrollToBottom();
+        }
+
+        // --- LOGIC FUNCTIONS ---
+
+        function showMenu(typing = true) {
+            // State 1 is the general menu selection/cart review state
+            chatState = 1;
+            
+            // If typing is true, show typing indicator and send a fresh message
+            if (typing) {
+                botTyping(() => {
+                    appendMessage("What else would you like to add?", 'bot');
+                    appendMenu();
+                });
+            } else {
+                // For initial load, append menu without a fresh "typing" message
+                appendMenu();
+            }
+        }
+        
+        function handleDishSelect(dishName) {
+            appendMessage(dishName, 'user');
+            
+            currentOrder.tempDish = menuItems.find(item => item.name === dishName);
+            chatState = 2; // Waiting for quantity
+            
+            // Set input type to number for easier mobile quantity entry
+            userInput.type = 'number';
+            userInput.placeholder = 'Enter quantity (e.g., 2)';
+
+            botTyping(() => {
+                appendMessage(`How many servings of <strong>${dishName}</strong> would you like? (Enter a number)`, 'bot', true);
+            });
+        }
+        
+        function handleQuantity(quantityText) {
+            const qty = parseInt(quantityText);
+            const dish = currentOrder.tempDish;
+            
+            if (isNaN(qty) || qty <= 0 || !Number.isInteger(qty)) {
+                appendMessage("Please enter a valid positive number for the quantity.", 'bot');
+                return; 
+            }
+            
+            // Add to Cart Logic
+            currentOrder.cart.push({
+                dish: dish.name,
+                qty: qty,
+                price: dish.price
+            });
+            
+            currentOrder.tempDish = null;
+            chatState = 1; // Back to MenuShown/CartReview state
+            
+            // Reset input type and placeholder
+            userInput.type = 'text'; 
+            userInput.placeholder = 'Type a message...';
+
+            botTyping(() => {
+                appendMessage(`✅ Added ${qty}x ${dish.name} to your cart.`, 'bot');
+                setTimeout(() => {
+                    appendMessage(getCartSummary(), 'bot', true);
+                    appendCartActionButtons();
+                }, 400);
+            });
+        }
+        
+        function startCheckout() {
+            appendMessage("Proceed to Checkout", 'user');
+            chatState = 3; // Needs Address
+            
+            // Reset input type and placeholder
+            userInput.type = 'text';
+            userInput.placeholder = 'Enter your delivery address';
+
+            botTyping(() => {
+                appendMessage("Great! Please enter your delivery address:", 'bot');
+            });
+        }
+        
+        // --- MESSAGE SENDING HANDLER (FIXED) ---
+        function handleUserSend() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            // The main processing function is called here
+            appendMessage(text, 'user');
+            userInput.value = '';
+
+            botTyping(() => processBotResponse(text));
+        }
+
+        // --- MAIN INPUT PROCESSOR ---
+
+        function processBotResponse(userText) {
+
+            switch (chatState) {
+                case 0: 
+                    // Should only be reached if user types something BEFORE the page loads fully
+                    // Since we implemented immediate start, this case is deprecated but here for safety.
+                    showMenu(false);
+                    break; 
+
+                case 1: // MenuShown/CartReview 
+                    // If cart is empty, repeat menu. If cart has items, repeat cart actions.
+                    if (currentOrder.cart.length === 0) {
+                        appendMessage("Please select a dish from the menu above to order.", 'bot');
+                        appendMenu();
+                    } else {
+                        appendMessage("Please choose an action: Add more items or proceed to checkout.", 'bot');
+                        appendCartActionButtons();
+                    }
+                    break;
+
+                case 2: // Item Selected -> Waiting for Quantity
+                    handleQuantity(userText);
+                    break;
+
+                case 3: // Checkout -> Waiting for Address
+                    currentOrder.address = userText;
+                    appendMessage("Thank you. Please enter your phone number (11 digits, e.g., 03...):", 'bot');
+                    
+                    userInput.type = 'number'; 
+                    userInput.placeholder = 'Enter phone number (e.g., 03...)';
+                    
+                    chatState = 4; // Needs Phone
+                    break;
+
+                case 4: // Checkout -> Waiting for Phone & Validate
+                    const cleanNum = userText.replace(/[\s-]/g, '');
+                    const phoneRegex = /^03\d{9}$/;
+                    
+                    if (!phoneRegex.test(cleanNum)) {
+                        appendMessage("Invalid format. Number must be 11 digits and start with 03. Please try again.", 'bot');
+                        userInput.type = 'number'; // Keep type as number for re-entry
+                        return; 
+                    }
+
+                    currentOrder.phone = cleanNum;
+                    
+                    // Reset input type and placeholder before final review
+                    userInput.type = 'text'; 
+                    userInput.placeholder = 'Type a message...';
+
+                    botTyping(() => {
+                        appendMessage(`<strong>FINAL ORDER REVIEW</strong><br>${getCartSummary(true)}<br>Address: ${currentOrder.address}<br>Phone: ${currentOrder.phone}`, 'bot', true);
+                        appendFinalConfirmButtons();
+                        chatState = 5; // Confirm Mode
+                    });
+                    break;
+
+                case 5: // Confirmation Mode (Irrelevant text repeats confirm buttons)
+                    appendMessage("Please click CONFIRM ORDER or CANCEL.", 'bot');
+                    appendFinalConfirmButtons();
+                    break;
+            }
+        }
+
+        // --- UTILITY FUNCTIONS ---
+
+        function getCartSummary(detailed = false) {
+            if (currentOrder.cart.length === 0) return "Your cart is currently empty.";
+
+            let total = 0;
+            let summaryHTML = '<strong>Current Cart:</strong><br>';
+            
+            currentOrder.cart.forEach(item => {
+                const itemTotal = item.qty * item.price;
+                total += itemTotal;
+                summaryHTML += `• ${item.qty}x ${item.dish} (${(item.price * item.qty).toLocaleString()} PKR)<br>`;
+            });
+
+            summaryHTML += `<br><strong>TOTAL: ${total.toLocaleString()} PKR</strong>`;
+
+            return summaryHTML;
+        }
+
+        function finalizeOrder() {
+            // Build WhatsApp Message
+            let message = `*FRICHICKS NEW ORDER*\n\n`;
+            let total = 0;
+
+            currentOrder.cart.forEach(item => {
+                const itemTotal = item.qty * item.price;
+                total += itemTotal;
+                message += `${item.qty}x ${item.dish} @ ${item.price.toLocaleString()} PKR each\n`;
+            });
+
+            message += `\n*TOTAL BILL: ${total.toLocaleString()} PKR*\n\n`;
+            message += `*DELIVERY DETAILS:*\n`;
+            message += `Address: ${currentOrder.address}\n`;
+            message += `Contact: ${currentOrder.phone}`;
+            
+            const url = `https://wa.me/${restaurantNumber}?text=${encodeURIComponent(message)}`;
+            
+            window.open(url, '_blank');
+
+            // Reset Chat locally
+            appendMessage("Redirecting to WhatsApp to submit your order...", 'bot');
+            setTimeout(() => {
+                resetChat(true);
+            }, 1500);
+        }
+
+        function resetChat(silent = false) {
+            currentOrder = { cart: [], tempDish: null, address: "", phone: "" };
+            chatState = 0;
+            userInput.type = 'text';
+            userInput.placeholder = 'Type a message...';
+
+            if (!silent) {
+                 appendMessage("Order cancelled. Click below to start a new order.", 'bot');
+                 setTimeout(() => {
+                    // Show a restart button
+                    const grid = document.createElement('div');
+                    grid.className = 'options-grid msg-row bot';
+                    const btn = document.createElement('div');
+                    btn.className = 'option-card';
+                    btn.style.justifyContent = 'center';
+                    btn.innerHTML = '<strong>START NEW ORDER</strong>';
+                    btn.onclick = () => window.location.reload(); // Simple reload for full reset
+                    grid.appendChild(btn);
+                    chatCanvas.insertBefore(grid, typingIndicator);
+                    scrollToBottom();
+                 }, 400);
+            } else {
+                setTimeout(() => {
+                    // Force a page reload for the cleanest start experience after an order
+                    window.location.reload();
+                }, 1000);
+            }
+        }
+
+        // --- INITIALIZATION & EVENTS ---
+        
+        // Immediate Chat Start on page load (Fixing the "not hi hello to start" issue)
+        window.onload = () => {
+            botTyping(() => {
+                appendMessage("Welcome to Frichicks! Here is our exclusive menu. Please select a dish to begin your order.", 'bot');
+                showMenu(false); // Call showMenu without a repeated typing animation
+            });
+        };
+
+        sendBtn.addEventListener('click', handleUserSend);
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleUserSend();
+        });
+    </script>
+</body>
+</html>
