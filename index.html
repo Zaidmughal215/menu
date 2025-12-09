@@ -6,7 +6,7 @@
     <title>Frichicks Multi-Item Order Assistant</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
-        /* --- 1. CORE VARIABLES & RESET (Maintained B&W Theme) --- */
+        /* --- 1. CORE VARIABLES & RESET --- */
         :root {
             --bg-color: #000000;
             --surface-color: #111111;
@@ -17,6 +17,7 @@
             
             --success-color: #2ecc71; /* Green */
             --danger-color: #e74c3c;  /* Red */
+            --footer-height-safe: 100px; /* NEW: Safe margin for mobile keyboard/footer */
 
             --font-main: 'Inter', sans-serif;
             --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -52,12 +53,12 @@
             text-transform: uppercase;
         }
 
-        /* --- 3. CHAT AREA --- */
+        /* --- 3. CHAT AREA (FIX: Increased bottom padding for mobile comfort) --- */
         #chat-canvas {
             flex: 1;
             overflow-y: auto;
             padding: 20px;
-            padding-bottom: 90px;
+            padding-bottom: var(--footer-height-safe); /* Ensures messages don't hide under the fixed footer */
             display: flex;
             flex-direction: column;
             gap: 16px;
@@ -145,7 +146,7 @@
         .dot:nth-child(1) { animation-delay: -0.32s; }
         .dot:nth-child(2) { animation-delay: -0.16s; }
 
-        /* --- 4. INPUT AREA --- */
+        /* --- 4. INPUT AREA (Fixed to bottom) --- */
         footer {
             position: fixed;
             bottom: 0;
@@ -216,7 +217,7 @@
         ];
 
         // --- STATE MANAGEMENT ---
-        /* 0=Idle (shouldn't be reached after start), 1=MenuShown/CartReview, 2=ItemSelected(Needs Quantity), 
+        /* 0=Idle (only before immediate start), 1=MenuShown/CartReview, 2=ItemSelected(Needs Quantity), 
            3=Checkout(Needs Address), 4=Checkout(Needs Phone), 5=ConfirmMode
         */
         let chatState = 0; 
@@ -238,6 +239,7 @@
         // --- CORE UI FUNCTIONS ---
 
         function scrollToBottom() {
+            // Ensures the viewport is focused on the latest message, crucial for mobile comfort
             chatCanvas.scrollTop = chatCanvas.scrollHeight;
         }
 
@@ -284,7 +286,7 @@
             const btnAdd = document.createElement('div');
             btnAdd.className = 'option-card';
             btnAdd.innerText = 'ADD MORE ITEMS';
-            btnAdd.onclick = () => showMenu(true); // Call showMenu to go back to dish selection
+            btnAdd.onclick = () => showMenu(true);
 
             const btnCheckout = document.createElement('div');
             btnCheckout.className = 'option-card btn-green';
@@ -320,17 +322,15 @@
         // --- LOGIC FUNCTIONS ---
 
         function showMenu(typing = true) {
-            // State 1 is the general menu selection/cart review state
             chatState = 1;
             
-            // If typing is true, show typing indicator and send a fresh message
             if (typing) {
                 botTyping(() => {
                     appendMessage("What else would you like to add?", 'bot');
                     appendMenu();
                 });
             } else {
-                // For initial load, append menu without a fresh "typing" message
+                // Initial load: append menu directly after the welcome message
                 appendMenu();
             }
         }
@@ -341,7 +341,6 @@
             currentOrder.tempDish = menuItems.find(item => item.name === dishName);
             chatState = 2; // Waiting for quantity
             
-            // Set input type to number for easier mobile quantity entry
             userInput.type = 'number';
             userInput.placeholder = 'Enter quantity (e.g., 2)';
 
@@ -359,7 +358,6 @@
                 return; 
             }
             
-            // Add to Cart Logic
             currentOrder.cart.push({
                 dish: dish.name,
                 qty: qty,
@@ -369,7 +367,6 @@
             currentOrder.tempDish = null;
             chatState = 1; // Back to MenuShown/CartReview state
             
-            // Reset input type and placeholder
             userInput.type = 'text'; 
             userInput.placeholder = 'Type a message...';
 
@@ -386,7 +383,6 @@
             appendMessage("Proceed to Checkout", 'user');
             chatState = 3; // Needs Address
             
-            // Reset input type and placeholder
             userInput.type = 'text';
             userInput.placeholder = 'Enter your delivery address';
 
@@ -395,12 +391,10 @@
             });
         }
         
-        // --- MESSAGE SENDING HANDLER (FIXED) ---
         function handleUserSend() {
             const text = userInput.value.trim();
             if (!text) return;
 
-            // The main processing function is called here
             appendMessage(text, 'user');
             userInput.value = '';
 
@@ -413,13 +407,11 @@
 
             switch (chatState) {
                 case 0: 
-                    // Should only be reached if user types something BEFORE the page loads fully
-                    // Since we implemented immediate start, this case is deprecated but here for safety.
-                    showMenu(false);
+                    // State 0 is only active briefly on initial load. If reached, restart the process.
+                    window.location.reload(); 
                     break; 
 
                 case 1: // MenuShown/CartReview 
-                    // If cart is empty, repeat menu. If cart has items, repeat cart actions.
                     if (currentOrder.cart.length === 0) {
                         appendMessage("Please select a dish from the menu above to order.", 'bot');
                         appendMenu();
@@ -449,13 +441,12 @@
                     
                     if (!phoneRegex.test(cleanNum)) {
                         appendMessage("Invalid format. Number must be 11 digits and start with 03. Please try again.", 'bot');
-                        userInput.type = 'number'; // Keep type as number for re-entry
+                        userInput.type = 'number'; 
                         return; 
                     }
 
                     currentOrder.phone = cleanNum;
                     
-                    // Reset input type and placeholder before final review
                     userInput.type = 'text'; 
                     userInput.placeholder = 'Type a message...';
 
@@ -466,7 +457,7 @@
                     });
                     break;
 
-                case 5: // Confirmation Mode (Irrelevant text repeats confirm buttons)
+                case 5: // Confirmation Mode
                     appendMessage("Please click CONFIRM ORDER or CANCEL.", 'bot');
                     appendFinalConfirmButtons();
                     break;
@@ -512,7 +503,6 @@
             
             window.open(url, '_blank');
 
-            // Reset Chat locally
             appendMessage("Redirecting to WhatsApp to submit your order...", 'bot');
             setTimeout(() => {
                 resetChat(true);
@@ -520,41 +510,19 @@
         }
 
         function resetChat(silent = false) {
-            currentOrder = { cart: [], tempDish: null, address: "", phone: "" };
-            chatState = 0;
-            userInput.type = 'text';
-            userInput.placeholder = 'Type a message...';
-
-            if (!silent) {
-                 appendMessage("Order cancelled. Click below to start a new order.", 'bot');
-                 setTimeout(() => {
-                    // Show a restart button
-                    const grid = document.createElement('div');
-                    grid.className = 'options-grid msg-row bot';
-                    const btn = document.createElement('div');
-                    btn.className = 'option-card';
-                    btn.style.justifyContent = 'center';
-                    btn.innerHTML = '<strong>START NEW ORDER</strong>';
-                    btn.onclick = () => window.location.reload(); // Simple reload for full reset
-                    grid.appendChild(btn);
-                    chatCanvas.insertBefore(grid, typingIndicator);
-                    scrollToBottom();
-                 }, 400);
-            } else {
-                setTimeout(() => {
-                    // Force a page reload for the cleanest start experience after an order
-                    window.location.reload();
-                }, 1000);
-            }
+            // Forces a page reload for the cleanest start experience after an order/cancel
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
         }
 
         // --- INITIALIZATION & EVENTS ---
         
-        // Immediate Chat Start on page load (Fixing the "not hi hello to start" issue)
+        // Immediate Chat Start on page load
         window.onload = () => {
             botTyping(() => {
                 appendMessage("Welcome to Frichicks! Here is our exclusive menu. Please select a dish to begin your order.", 'bot');
-                showMenu(false); // Call showMenu without a repeated typing animation
+                showMenu(false); // Immediate menu display
             });
         };
 
